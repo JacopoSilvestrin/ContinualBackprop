@@ -31,7 +31,7 @@ class LearningNet(nn.Module):
         self.hiddenUtility = np.zeros((hiddenLayerDim))
         self.nHiddenLayers = 1
 
-        self.replacementRate = 0.001
+        self.replacementRate = 0.1
         self.decayRate = 0.99
         self.maturityThreshold = 100
 
