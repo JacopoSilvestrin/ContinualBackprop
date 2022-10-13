@@ -64,8 +64,8 @@ class LearningNet(nn.Module):
         # Take hidden units values from dictionary
         self.hiddenUnits = np.reshape(self.activation['h1'].detach().numpy(),
                                             (self.hiddenUnitsAvgBias.shape[0]))
-        print("Activations: check if many are dead")
-        print(self.hiddenUnits)
+        #print("Activations: check if many are dead")
+        #print(self.hiddenUnits)
         # Unbiased estimate. Warning: uses old mean estimate of the hidden units.
         self.hiddenUnitsAvg = self.hiddenUnitsAvgBias / (1 - np.power(self.decayRate, self.hiddenUnitsAge))
         # Biased estimate: updated with current hidden units values
