@@ -82,11 +82,11 @@ for j in range(0, runsN):
         benchErrors[j, i] = benchLoss.detach().item()
         benchLearner.zero_grad()
         benchLoss.backward()
-        '''print("Print some gradients:")
-        print("w1:")
-        print(benchLearner.l1.weight.grad)
-        print("w2")
-        print(benchLearner.l2.weight.grad)'''
+        #print("Print some gradients:")
+        #print("w1:")
+        #print(benchLearner.l1.weight.grad)
+        #print("w2")
+        #print(benchLearner.l2.weight.grad)
         benchLearner.optimizer.step()
 
 np.save("contErrors", contErrors)
