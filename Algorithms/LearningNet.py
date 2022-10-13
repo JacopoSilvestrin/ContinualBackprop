@@ -12,15 +12,15 @@ class LearningNet(nn.Module):
 
     def __init__(self, stateDim, outDim):
         super(LearningNet, self).__init__()
-        hiddenLayerDim = 5
+        hiddenLayerDim = 64
         self.l1 = nn.Linear(stateDim, hiddenLayerDim)
-        self.a1 = nn.ReLU()
+        self.a1 = nn.LeakyReLU()
         self.l2 = nn.Linear(hiddenLayerDim, outDim)
 
 
         # Initialise the weights
-        torch.nn.init.kaiming_uniform_(self.l1.weight, mode='fan_in', nonlinearity='relu')
-        torch.nn.init.kaiming_uniform_(self.l2.weight, mode='fan_in', nonlinearity='relu')
+        torch.nn.init.kaiming_uniform_(self.l1.weight, mode='fan_in', nonlinearity='leaky_relu')
+        torch.nn.init.kaiming_uniform_(self.l2.weight, mode='fan_in', nonlinearity='leaky_relu')
 
         # Continual Backprop parameters
         self.hiddenUnits = np.zeros((hiddenLayerDim))
@@ -31,11 +31,12 @@ class LearningNet(nn.Module):
         self.hiddenUtility = np.zeros((hiddenLayerDim))
         self.nHiddenLayers = 1
 
-        self.replacementRate = 0.1
+        self.replacementRate = 1e-4
         self.decayRate = 0.99
         self.maturityThreshold = 100
+        self.unitsToReplace = 0
 
-        self.optimizer = torch.optim.SGD(self.parameters(), lr=10e-2)
+        self.optimizer = torch.optim.SGD(self.parameters(), lr=1e-2)
 
         self.activation = {}
 
@@ -54,13 +55,17 @@ class LearningNet(nn.Module):
         x = self.l2(x)
         hook1.remove()
 
+        if False:
+            return x
+
         # Update hidden units age
         self.hiddenUnitsAge += 1
         # Update hidden units estimates
         # Take hidden units values from dictionary
         self.hiddenUnits = np.reshape(self.activation['h1'].detach().numpy(),
                                             (self.hiddenUnitsAvgBias.shape[0]))
-
+        print("Activations: check if many are dead")
+        print(self.hiddenUnits)
         # Unbiased estimate. Warning: uses old mean estimate of the hidden units.
         self.hiddenUnitsAvg = self.hiddenUnitsAvgBias / (1 - np.power(self.decayRate, self.hiddenUnitsAge))
         # Biased estimate: updated with current hidden units values
@@ -103,9 +108,10 @@ class LearningNet(nn.Module):
 
 
         # Select lower utility features depending on the replacement rate
-        unitsToReplace = math.ceil(self.replacementRate * np.count_nonzero(self.hiddenUnitsAge > self.maturityThreshold))
+        self.unitsToReplace += self.replacementRate * np.count_nonzero(self.hiddenUnitsAge > self.maturityThreshold)
 
-        while (unitsToReplace > 0):
+        # If we accumulated enough to have one or more units to replace
+        while (self.unitsToReplace >= 1):
             # Scan matrix of utilities to find lower element with age > maturityThreshold.
             min = self.hiddenUtility[0]
             minPos = 0
@@ -131,7 +137,7 @@ class LearningNet(nn.Module):
             weights = self.state_dict()
             # Reinitialise input weights (i-th row of previous layer)
             temp = torch.empty((1, weights['l1.weight'].shape[1]))
-            torch.nn.init.kaiming_uniform_(temp, mode='fan_in', nonlinearity='relu')
+            torch.nn.init.kaiming_uniform_(temp, mode='fan_in', nonlinearity='leaky_relu')
             weights['l1.weight'][minPos, :] = temp
             # Reset the input bias
             weights['l1.bias'][minPos] = 0
@@ -140,9 +146,8 @@ class LearningNet(nn.Module):
             # weights['l2.bias'][i] = 0
             # Load stat_dict to the model to save changes
             self.load_state_dict(weights)
-
             # We replaced a hidden unit, reduce counter.
-            unitsToReplace -= 1
+            self.unitsToReplace -= 1
 
 
 if __name__ == "__main__":

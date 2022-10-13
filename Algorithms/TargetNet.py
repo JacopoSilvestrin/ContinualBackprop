@@ -12,7 +12,7 @@ class TargetNet(nn.Module):
 
     def __init__(self, stateDim):
         super(TargetNet, self).__init__()
-        hiddenLayerDim = 100
+        hiddenLayerDim = 32
         self.l1 = nn.Linear(stateDim, hiddenLayerDim)
         #self.a1 = nn.() # TODO: Linear Activation Function (maybe I have to do it myself)
         self.l2 = nn.Linear(hiddenLayerDim, 1)
@@ -23,9 +23,7 @@ class TargetNet(nn.Module):
             self.l1.bias[:] = torch.from_numpy(np.random.choice([-1, 1], hiddenLayerDim))
             self.l2.weight[:,:] = torch.from_numpy(np.random.choice([-1, 1], (1, hiddenLayerDim)))
             self.l2.bias[:] = torch.from_numpy(np.random.choice([-1, 1], 1))
-
-        self.optimizer = torch.optim.SGD(self.parameters(), lr=10e-4)
-        self.beta = 0.7
+            self.beta = 0.7
 
     def forward(self, x):
         m = torch.numel(x) + 1
