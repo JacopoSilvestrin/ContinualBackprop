@@ -12,7 +12,7 @@ class LearningNet(nn.Module):
 
     def __init__(self, stateDim, outDim):
         super(LearningNet, self).__init__()
-        hiddenLayerDim = 64
+        hiddenLayerDim = 5
         self.l1 = nn.Linear(stateDim, hiddenLayerDim)
         self.a1 = nn.LeakyReLU()
         self.l2 = nn.Linear(hiddenLayerDim, outDim)
@@ -54,9 +54,6 @@ class LearningNet(nn.Module):
         x = self.a1(x)
         x = self.l2(x)
         hook1.remove()
-
-        if False:
-            return x
 
         # Update hidden units age
         self.hiddenUnitsAge += 1

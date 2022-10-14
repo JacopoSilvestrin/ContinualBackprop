@@ -12,7 +12,7 @@ class TargetNet(nn.Module):
 
     def __init__(self, stateDim):
         super(TargetNet, self).__init__()
-        hiddenLayerDim = 32
+        hiddenLayerDim = 100
         self.l1 = nn.Linear(stateDim, hiddenLayerDim)
         #self.a1 = nn.() # TODO: Linear Activation Function (maybe I have to do it myself)
         self.l2 = nn.Linear(hiddenLayerDim, 1)
