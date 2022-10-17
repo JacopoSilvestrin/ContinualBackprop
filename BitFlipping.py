@@ -16,7 +16,7 @@ T = 10000
 random.seed(42)
 np.random.seed(42)
 
-exampleN = 20000
+exampleN = 1000000
 runsN = 30
 
 # Errors values

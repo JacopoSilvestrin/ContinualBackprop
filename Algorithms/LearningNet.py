@@ -14,13 +14,13 @@ class LearningNet(nn.Module):
         super(LearningNet, self).__init__()
         hiddenLayerDim = 5
         self.l1 = nn.Linear(stateDim, hiddenLayerDim)
-        self.a1 = nn.LeakyReLU()
+        self.a1 = nn.ReLU()
         self.l2 = nn.Linear(hiddenLayerDim, outDim)
 
 
         # Initialise the weights
-        torch.nn.init.kaiming_uniform_(self.l1.weight, mode='fan_in', nonlinearity='leaky_relu')
-        torch.nn.init.kaiming_uniform_(self.l2.weight, mode='fan_in', nonlinearity='leaky_relu')
+        torch.nn.init.kaiming_uniform_(self.l1.weight, mode='fan_in', nonlinearity='relu')
+        torch.nn.init.kaiming_uniform_(self.l2.weight, mode='fan_in', nonlinearity='relu')
 
         # Continual Backprop parameters
         self.hiddenUnits = np.zeros((hiddenLayerDim))
@@ -134,7 +134,7 @@ class LearningNet(nn.Module):
             weights = self.state_dict()
             # Reinitialise input weights (i-th row of previous layer)
             temp = torch.empty((1, weights['l1.weight'].shape[1]))
-            torch.nn.init.kaiming_uniform_(temp, mode='fan_in', nonlinearity='leaky_relu')
+            torch.nn.init.kaiming_uniform_(temp, mode='fan_in', nonlinearity='relu')
             weights['l1.weight'][minPos, :] = temp
             # Reset the input bias
             weights['l1.bias'][minPos] = 0
