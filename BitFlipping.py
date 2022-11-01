@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from Algorithms.LearningNet import LearningNet
 from Algorithms.TargetNet import TargetNet
+from Algorithms.GrowingNet import GrowingNet
 import random
 import sys
 from torch import nn
@@ -21,6 +22,7 @@ runsN = 30
 
 # Errors values
 contErrors = np.zeros((runsN, exampleN))
+growErrors = np.zeros((runsN, exampleN))
 benchErrors = np.zeros((runsN, exampleN))
 inputs = np.zeros((runsN, exampleN, m))
 outputs = np.zeros((runsN, exampleN))
@@ -34,6 +36,7 @@ for j in range(0, runsN):
 
     # Create learner networks
     contLearner = LearningNet(m, 1)
+    growLearner = GrowingNet(m,1)
     benchLearner = LearningNet(m, 1)
 
     # Set input
@@ -64,10 +67,12 @@ for j in range(0, runsN):
         y = target(torch.from_numpy(inputVec).type(torch.FloatTensor))
         y1 = y.detach().clone()
         y2 = y.detach().clone()
+        y3 = y.detach().clone()
         outputs[j, i] = y.detach().item()
 
         outCont = contLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
         outBench = benchLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+        outGrow = growLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
 
         # Train contLearner
         contLoss = (outCont - y1) ** 2
@@ -89,8 +94,17 @@ for j in range(0, runsN):
         #print(benchLearner.l2.weight.grad)
         benchLearner.optimizer.step()
 
+        # Train grow learner
+        growLoss = (outGrow - y3) ** 2
+        growErrors[j, i] = growLoss.detach().item()
+        growLearner.zero_grad()
+        growLoss.backward()
+        growLearner.optimizer.step()
+        growLearner.growNet(1)
+
 np.save("contErrors", contErrors)
 np.save("benchErrors", benchErrors)
+np.save("growErrors", growErrors)
 np.save("inputHistory", inputs)
 np.save("outputHistory", outputs)
 

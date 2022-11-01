@@ -17,10 +17,11 @@ class LearningNet(nn.Module):
         self.a1 = nn.ReLU()
         self.l2 = nn.Linear(hiddenLayerDim, outDim)
 
-
         # Initialise the weights
         torch.nn.init.kaiming_uniform_(self.l1.weight, mode='fan_in', nonlinearity='relu')
         torch.nn.init.kaiming_uniform_(self.l2.weight, mode='fan_in', nonlinearity='relu')
+        torch.nn.init.zeros_(self.l1.bias)
+        torch.nn.init.zeros_(self.l2.bias)
 
         # Continual Backprop parameters
         self.hiddenUnits = np.zeros((hiddenLayerDim))
