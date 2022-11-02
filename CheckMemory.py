@@ -111,7 +111,7 @@ for j in range(0, runsN):
         growErrors[j, i] = growLoss.detach().item()
         benchErrors[j, i] = benchLoss.detach().item()
 
-        '''# Train cont
+        # Train cont
         contLearner.zero_grad()
         contLoss.backward()
         contLearner.optimizer.step()
@@ -124,7 +124,7 @@ for j in range(0, runsN):
         growLearner.zero_grad()
         growLoss.backward()
         growLearner.optimizer.step()
-        growLearner.growNet(1)'''
+        growLearner.growNet(1)
 
 np.save("contErrors", contErrors)
 np.save("growErrors", growErrors)
