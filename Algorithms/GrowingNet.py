@@ -29,14 +29,13 @@ class GrowingNet(nn.Module):
         torch.nn.init.zeros_(self.l1.bias)
         print("Post")
         print(self.l1.bias.data)'''
+        torch.nn.init.zeros_(self.l1.bias)
         torch.nn.init.zeros_(self.l2.bias)
 
         self.additionPeriod = 1e4
         self.counter = 0
 
         self.optimizer = torch.optim.SGD(self.parameters(), lr=1e-2)
-
-        self.activation = {}
 
     def forward(self, x):
         x = self.l1(x)

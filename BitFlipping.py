@@ -3,6 +3,7 @@ import numpy as np
 from Algorithms.LearningNet import LearningNet
 from Algorithms.TargetNet import TargetNet
 from Algorithms.GrowingNet import GrowingNet
+from Algorithms.FisherNet import FisherNet
 import random
 import sys
 from torch import nn
@@ -11,19 +12,20 @@ from torch import nn
 
 m = 20
 f = 15
-T = 10000
+T = 100000
 
 # Set seed
 random.seed(42)
 np.random.seed(42)
 
-exampleN = 1000000
+exampleN = 60000
 runsN = 30
 
 # Errors values
 contErrors = np.zeros((runsN, exampleN))
 growErrors = np.zeros((runsN, exampleN))
 benchErrors = np.zeros((runsN, exampleN))
+fisherErrors = np.zeros((runsN, exampleN))
 inputs = np.zeros((runsN, exampleN, m))
 outputs = np.zeros((runsN, exampleN))
 
@@ -38,6 +40,7 @@ for j in range(0, runsN):
     contLearner = LearningNet(m, 1)
     growLearner = GrowingNet(m,1)
     benchLearner = LearningNet(m, 1)
+    fisherLearner = FisherNet(m, 1)
 
     # Set input
     inputVec = np.random.choice([0, 1], m)
@@ -50,6 +53,7 @@ for j in range(0, runsN):
         inputVec[f:] = np.random.choice([0, 1], m - f)
         # Flip one of the first f bit every T timesteps
         if i % T == 0 and i != 0:
+            print("Let's flip a bit.")
             index = np.random.randint(f)
             if inputVec[index] == 0:
                 inputVec[index] = 1
@@ -68,11 +72,13 @@ for j in range(0, runsN):
         y1 = y.detach().clone()
         y2 = y.detach().clone()
         y3 = y.detach().clone()
+        y4 = y.detach().clone()
         outputs[j, i] = y.detach().item()
 
         outCont = contLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
         outBench = benchLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
         outGrow = growLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+        outFisher = fisherLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
 
         # Train contLearner
         contLoss = (outCont - y1) ** 2
@@ -102,9 +108,19 @@ for j in range(0, runsN):
         growLearner.optimizer.step()
         growLearner.growNet(1)
 
+        # Train Fisher learner
+        fisherLoss = (outFisher - y4) ** 2
+        fisherErrors[j, i] = fisherLoss.detach().item()
+        fisherLearner.zero_grad()
+        fisherLoss.backward()
+        fisherLearner.computeFisher()
+        fisherLearner.optimizer.step()
+        fisherLearner.FisherReplacement()
+
 np.save("contErrors", contErrors)
 np.save("benchErrors", benchErrors)
 np.save("growErrors", growErrors)
+np.save("fisherErrors", fisherErrors)
 np.save("inputHistory", inputs)
 np.save("outputHistory", outputs)
 

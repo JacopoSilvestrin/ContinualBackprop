@@ -1,6 +1,9 @@
 import torch
 from torch import nn
 import numpy as np
+from nngeometry.metrics import FIM
+from nngeometry.object import PMatDiag
+from torch.utils.data import TensorDataset, DataLoader
 import math
 import torch.nn.functional as F
 import collections
@@ -8,14 +11,17 @@ from typing import DefaultDict, Tuple, List, Dict
 from functools import partial
 
 
-class LearningNet(nn.Module):
+class FisherNet(nn.Module):
 
     def __init__(self, stateDim, outDim):
-        super(LearningNet, self).__init__()
+        super(FisherNet, self).__init__()
         hiddenLayerDim = 5
         self.l1 = nn.Linear(stateDim, hiddenLayerDim)
         self.a1 = nn.ReLU()
         self.l2 = nn.Linear(hiddenLayerDim, outDim)
+        self.model = nn.Sequential(self.l1, self.a1, self.l2)
+
+        self.outDim = outDim
 
         # Initialise the weights
         torch.nn.init.kaiming_uniform_(self.l1.weight, mode='fan_in', nonlinearity='relu')
@@ -31,6 +37,20 @@ class LearningNet(nn.Module):
         self.hiddenUtilityBias = np.zeros((hiddenLayerDim))
         self.hiddenUtility = np.zeros((hiddenLayerDim))
         self.nHiddenLayers = 1
+
+        # Fisher resets parameters
+        self.data = []
+        self.nParams = 0
+        for layer in self.model:
+            if isinstance(layer, nn.Linear):
+                self.nParams += torch.numel(layer.weight)
+                self.nParams += torch.numel(layer.bias)
+
+        self.weightAge = np.zeros((self.nParams))
+        self.F = np.zeros((self.nParams, self.nParams))
+        self.DiagF = np.zeros(self.nParams)
+        self.FCount = 0
+        self.resetPeriod = 1e2
 
         self.replacementRate = 1e-4
         self.decayRate = 0.99
@@ -51,9 +71,10 @@ class LearningNet(nn.Module):
     def forward(self, x):
         hook1 = self.a1.register_forward_hook(self.getActivation('h1'))
         #print(x.dtype)
-        x = self.l1(x)
-        x = self.a1(x)
-        x = self.l2(x)
+        #x = self.l1(x)
+        #x = self.a1(x)
+        #x = self.l2(x)
+        x = self.model(x)
         hook1.remove()
 
         # Update hidden units age
@@ -100,6 +121,68 @@ class LearningNet(nn.Module):
 
         return x
 
+    def computeFisher(self):
+        # Computation of Fisher
+        self.weightAge += 1
+        paramsVec = np.array([])
+        for layer in self.model:
+            if isinstance(layer, nn.Linear):
+                weightsGrad = layer.weight.grad.detach().flatten().numpy()
+                biasGrad = layer.bias.grad.detach().flatten().numpy()
+                paramsVec = np.concatenate((paramsVec, weightsGrad, biasGrad), axis=0)
+
+        self.F = self.decayRate * self.F + (1 - self.decayRate) * np.outer(paramsVec, paramsVec)
+        self.DiagF = self.decayRate * self.DiagF + (1 - self.decayRate) * np.square(paramsVec)
+        #self.FCount += 1
+
+    def FisherReplacement(self, mode='diag'):
+        self.FCount += 1
+        #self.computeFisher()
+        if self.FCount % self.resetPeriod != 0:
+            return
+        # TODO
+        if mode == 'full':
+            return
+        elif mode == 'diag':
+            # Count weights to replace
+            #self.unitsToReplace += self.replacementRate * np.count_nonzero(self.weightAge > self.maturityThreshold)
+            min = np.amin(self.DiagF)
+            minPositions = []
+            for i in range(self.DiagF.size):
+                if self.DiagF[i] == min and self.weightAge[i] < self.maturityThreshold:
+                    #minPos = np.concatenate((minPositions, i), axis=0)
+                    minPositions.append(i)
+
+            if len(minPositions):
+                resetPos = np.random.choice(minPositions)
+                self.resetWeight(resetPos)
+                self.weightAge[resetPos] = 0
+
+
+    def resetWeight(self, pos):
+        # The pos is on a representation that reads the network params left to right top to bottom
+        for layer in self.model:
+            if isinstance(layer, nn.Linear):
+                # Check if inside weight of network
+                if pos < layer.weight.numel():
+                    col = pos % layer.weight.shape[1]
+                    row = pos // layer.weight.shape[1]
+                    temp = torch.empty((1, layer.weight.shape[1]))
+                    torch.nn.init.kaiming_uniform_(temp, mode='fan_in', nonlinearity='relu')
+                    with torch.no_grad():
+                        layer.weight[row, col] = temp[0,0].clone()
+                    return
+                else:
+                    pos -= layer.weight.numel()
+                # Check if in bias of network
+                if pos < layer.bias.numel():
+                    layer.bias[pos] = 0
+                    return
+                else:
+                    pos -= layer.bias.numel()
+
+        return
+
     def genAndTest(self):
 
         nUnits = self.hiddenUnits.shape[0]
@@ -107,23 +190,36 @@ class LearningNet(nn.Module):
 
         # Select lower utility features depending on the replacement rate
         self.unitsToReplace += self.replacementRate * np.count_nonzero(self.hiddenUnitsAge > self.maturityThreshold)
+        while (self.unitsToReplace >= 1):
+            # Scan matrix of utilities to find lower element with age > maturityThreshold.
+            min = self.hiddenUtility[0]
+            minPos = 0
+            for i in range(self.hiddenUtility.shape[0]):
+                if self.hiddenUtility[i] < min and self.hiddenUnitsAge[i] > self.maturityThreshold:
+                    min = self.hiddenUtility[i]
+                    minPos = i
 
+            # If the min is in [0,j] it might be too young to be changed
+            if (self.hiddenUnitsAge[minPos]) < self.maturityThreshold:
+                break
+
+        # If we need to reset a unit we compute the fisher information matrix
+        #if self.unitsToReplace >= 1:
+            #FIM = FIM(model=self, loader=self.data, representation=PMatDiag, n_output=self.outDim, variant='regression')
+            #self.F = self.F / self.FCount
         # If we accumulated enough to have one or more units to replace
         while (self.unitsToReplace >= 1):
             # Scan matrix of utilities to find lower element with age > maturityThreshold.
-            min = np.amin(self.hiddenUtility)
-            #minPos = 0
-            minPos = []
+            min = self.hiddenUtility[0]
+            minPos = 0
             for i in range(self.hiddenUtility.shape[0]):
-                if self.hiddenUtility[i] == min and self.hiddenUnitsAge[i] > self.maturityThreshold:
-                    minPos.append(i)
+                if self.hiddenUtility[i] < min and self.hiddenUnitsAge[i] > self.maturityThreshold:
+                    min = self.hiddenUtility[i]
+                    minPos = i
 
-            if not len(minPos):
+            # If the min is in [0,j] it might be too young to be changed
+            if (self.hiddenUnitsAge[minPos]) < self.maturityThreshold:
                 break
-
-            # Pick one position randomly
-            minPos = np.random.choice(minPos)
-
             # Now out min and minPos values are legitimate and we can replace the input weights and set
             # to zero the outgoing weights for the selected hidden unit.
             # Set to 0 the age of the hidden unit.

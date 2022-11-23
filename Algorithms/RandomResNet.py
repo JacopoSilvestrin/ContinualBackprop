@@ -8,10 +8,10 @@ from typing import DefaultDict, Tuple, List, Dict
 from functools import partial
 
 
-class LearningNet(nn.Module):
+class RandomResNet(nn.Module):
 
     def __init__(self, stateDim, outDim):
-        super(LearningNet, self).__init__()
+        super(RandomResNet, self).__init__()
         hiddenLayerDim = 5
         self.l1 = nn.Linear(stateDim, hiddenLayerDim)
         self.a1 = nn.ReLU()
@@ -110,19 +110,9 @@ class LearningNet(nn.Module):
 
         # If we accumulated enough to have one or more units to replace
         while (self.unitsToReplace >= 1):
-            # Scan matrix of utilities to find lower element with age > maturityThreshold.
-            min = np.amin(self.hiddenUtility)
-            #minPos = 0
-            minPos = []
-            for i in range(self.hiddenUtility.shape[0]):
-                if self.hiddenUtility[i] == min and self.hiddenUnitsAge[i] > self.maturityThreshold:
-                    minPos.append(i)
-
-            if not len(minPos):
-                break
 
             # Pick one position randomly
-            minPos = np.random.choice(minPos)
+            minPos = np.random.choice(range(self.hiddenUtility.shape[0]))
 
             # Now out min and minPos values are legitimate and we can replace the input weights and set
             # to zero the outgoing weights for the selected hidden unit.
