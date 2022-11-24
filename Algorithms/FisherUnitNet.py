@@ -53,13 +53,14 @@ class FisherUnitNet(nn.Module):
         self.F = np.zeros((self.nParams, self.nParams))
         self.DiagF = np.zeros(self.nParams)
         self.FCount = 0
-        self.resetPeriod = 1e2
         self.fisherUtility = np.zeros((hiddenLayerDim))
 
         self.replacementRate = 1e-4
         self.decayRate = 0.99
         self.maturityThreshold = 100
         self.unitsToReplace = 0
+        # List of resetted units
+        self.unitReplaced = []
 
         self.optimizer = torch.optim.SGD(self.parameters(), lr=1e-2)
 
@@ -87,8 +88,6 @@ class FisherUnitNet(nn.Module):
         # Take hidden units values from dictionary
         self.hiddenUnits = np.reshape(self.activation['h1'].detach().numpy(),
                                             (self.hiddenUnitsAvgBias.shape[0]))
-        #print("Activations: check if many are dead")
-        #print(self.hiddenUnits)
         # Unbiased estimate. Warning: uses old mean estimate of the hidden units.
         self.hiddenUnitsAvg = self.hiddenUnitsAvgBias / (1 - np.power(self.decayRate, self.hiddenUnitsAge))
         # Biased estimate: updated with current hidden units values
@@ -132,6 +131,12 @@ class FisherUnitNet(nn.Module):
         self.computeFUtility()
         # Make replacements if needed
         self.FisherReplacement()
+
+    def compareUtility(self):
+        # Update Fisher matrix
+        self.computeFisher()
+        # Update utility
+        self.computeFUtility()
 
     def computeFisher(self):
         # Computation of Fisher
@@ -199,6 +204,7 @@ class FisherUnitNet(nn.Module):
 
             # Pick one position randomly
             minPos = np.random.choice(minPos)
+            self.unitReplaced.append(minPos)
 
             # Now out min and minPos values are legitimate and we can replace the input weights and set
             # to zero the outgoing weights for the selected hidden unit.

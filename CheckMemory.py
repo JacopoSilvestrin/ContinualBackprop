@@ -11,10 +11,11 @@ import sys
 from torch import nn
 
 # Bit-Flipping problem
-
 m = 20
 f = 15
 T = 10000
+
+# Detection parameters
 
 # Set seed
 random.seed(42)

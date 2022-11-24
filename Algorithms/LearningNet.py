@@ -36,6 +36,8 @@ class LearningNet(nn.Module):
         self.decayRate = 0.99
         self.maturityThreshold = 100
         self.unitsToReplace = 0
+        # List of resetted units
+        self.unitReplaced = []
 
         self.optimizer = torch.optim.SGD(self.parameters(), lr=1e-2)
 
@@ -123,6 +125,7 @@ class LearningNet(nn.Module):
 
             # Pick one position randomly
             minPos = np.random.choice(minPos)
+            self.unitReplaced.append(minPos)
 
             # Now out min and minPos values are legitimate and we can replace the input weights and set
             # to zero the outgoing weights for the selected hidden unit.
@@ -134,7 +137,6 @@ class LearningNet(nn.Module):
 
             # Reset weights
             # Take state_dict
-            # TODO: check if the initialisation now is different than the one I do at the beginning (depends on # of units?)
             weights = self.state_dict()
             # Reinitialise input weights (i-th row of previous layer)
             temp = torch.empty((1, weights['l1.weight'].shape[1]))
