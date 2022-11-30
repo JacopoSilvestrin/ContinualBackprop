@@ -1,20 +1,12 @@
 import torch
 from torch import nn
 import numpy as np
-from nngeometry.metrics import FIM
-from nngeometry.object import PMatDiag
-from torch.utils.data import TensorDataset, DataLoader
-import math
-import torch.nn.functional as F
-import collections
-from typing import DefaultDict, Tuple, List, Dict
-from functools import partial
 
 
-class FisherUnitNet(nn.Module):
+class DetectingNet(nn.Module):
 
     def __init__(self, stateDim, outDim):
-        super(FisherUnitNet, self).__init__()
+        super(DetectingNet, self).__init__()
         hiddenLayerDim = 5
         self.l1 = nn.Linear(stateDim, hiddenLayerDim)
         self.a1 = nn.ReLU()
@@ -22,6 +14,9 @@ class FisherUnitNet(nn.Module):
         self.model = nn.Sequential(self.l1, self.a1, self.l2)
 
         self.outDim = outDim
+        self.I = stateDim
+        self.H = hiddenLayerDim
+
 
         # Initialise the weights
         torch.nn.init.kaiming_uniform_(self.l1.weight, mode='fan_in', nonlinearity='relu')
@@ -51,7 +46,6 @@ class FisherUnitNet(nn.Module):
 
         self.hiddenFisherUnitsAge = np.zeros((hiddenLayerDim))
         self.F = np.zeros((self.nParams, self.nParams))
-        self.DiagF = np.zeros(self.nParams)
         self.FCount = 0
         self.fisherUtility = np.zeros((hiddenLayerDim))
 
@@ -62,6 +56,9 @@ class FisherUnitNet(nn.Module):
         self.slowMean = 0
         self.detectionCooldown = 100
 
+        # Grow params
+        self.counter = 0
+        self.additionPeriod = 1e4
 
         # Resets params
         self.replacementRate = 1e-4
@@ -158,7 +155,6 @@ class FisherUnitNet(nn.Module):
                 paramsVec = np.concatenate((paramsVec, weightsGrad, biasGrad), axis=0)
 
         self.F = self.decayRate * self.F + (1 - self.decayRate) * np.outer(paramsVec, paramsVec)
-        self.DiagF = self.decayRate * self.DiagF + (1 - self.decayRate) * np.square(paramsVec)
 
     # Used internally
     def computeFUtility(self):
@@ -215,7 +211,7 @@ class FisherUnitNet(nn.Module):
             minPos = np.random.choice(minPos)
             self.unitReplaced.append(minPos)
 
-            # Now out min and minPos values are legitimate and we can replace the input weights and set
+            # Now out min and minPos values are legitimate, and we can replace the input weights and set
             # to zero the outgoing weights for the selected hidden unit.
             # Set to 0 the age of the hidden unit.
             self.hiddenUnitsAge[minPos] = 0
@@ -243,10 +239,71 @@ class FisherUnitNet(nn.Module):
             # We replaced a hidden unit, reduce counter.
             self.unitsToReplace -= 1
 
+    def growNet(self, no_of_neurons=1):
+
+        if self.counter % self.additionPeriod != 0 or self.counter == 0:
+            self.counter += 1
+            return
+        with torch.no_grad():
+            weights = [self.l1.weight.data, self.l2.weight.data]
+            biases = [self.l1.bias.data, self.l2.bias.data]
+            self.l1 = torch.nn.Linear(self.I, self.H + no_of_neurons)
+            self.l2 = torch.nn.Linear(self.H + no_of_neurons, self.outDim)
+
+            self.l1.weight.data[0:-no_of_neurons, :] = weights[0]
+            temp = torch.empty((no_of_neurons, self.l1.weight.data.shape[1]))
+            torch.nn.init.kaiming_uniform_(temp, mode='fan_in', nonlinearity='relu')
+            self.l1.weight[-no_of_neurons:,:] = temp
+            self.l1.bias.data[0:-no_of_neurons] = biases[0]
+            self.l1.bias.data[-no_of_neurons:] = 0
+
+            self.l2.weight.data[:, 0:-no_of_neurons] = weights[1]
+            temp = torch.empty((self.l2.weight.data.shape[0], no_of_neurons))
+            torch.nn.init.kaiming_uniform_(temp, mode='fan_in', nonlinearity='relu')
+            self.l2.weight[:, -no_of_neurons:] = temp
+            self.l2.bias.data[:] = biases[1]
+
+            self.H = self.H + no_of_neurons
+            self.model = nn.Sequential(self.l1, self.a1, self.l2)
+            self.optimizer = torch.optim.SGD(self.parameters(), lr=1e-2)
+
+        # Add zero elements to Fisher matrix
+        temp = np.zeros((self.F.shape[0] + no_of_neurons * (2 + self.I), self.F.shape[0]+ no_of_neurons * (2 + self.I))) # Add self.I params on l1, noofneurons params on l2 and b1
+        tempIndex = 0
+        fIndex = 0
+        # Add entries relative to weights of first layer
+        temp[tempIndex:tempIndex+weights[0].numel(), tempIndex:tempIndex+weights[0].numel()] = self.F[fIndex:fIndex+weights[0].numel(), fIndex:fIndex+weights[0].numel()]
+        fIndex += weights[0].numel()
+        tempIndex = fIndex + weights[0].shape[1] * no_of_neurons
+        # Add entries relative to bias of first layer
+        temp[tempIndex:tempIndex+biases[0].numel(), tempIndex:tempIndex+biases[0].numel()] = self.F[fIndex:fIndex+biases[0].numel(), fIndex:fIndex+biases[0].numel()]
+        fIndex += biases[0].numel()
+        tempIndex = fIndex + no_of_neurons
+        # Add entries relative to weights of second layer
+        temp[tempIndex:tempIndex+weights[1].numel(), tempIndex:tempIndex+weights[1].numel()] = self.F[fIndex:fIndex+weights[1].numel(), fIndex:fIndex+weights[1].numel()]
+        fIndex += weights[1].numel()
+        tempIndex = fIndex + weights[1].shape[0] * no_of_neurons
+        # Add entries relative to bias of second layer
+        temp[tempIndex:tempIndex+biases[1].numel(), tempIndex:tempIndex+biases[1].numel()] = self.F[fIndex:fIndex+biases[1].numel(), fIndex:fIndex+biases[1].numel()]
+
+        self.F = temp
+        # Add zero element to age vectors (both fisher and CBP)
+        self.hiddenUnitsAge = np.append(self.hiddenUnitsAge, [0])
+        self.hiddenFisherUnitsAge = np.append(self.hiddenFisherUnitsAge, [0])
+        # Add zero elements to utility vectors of CBP and Fisher
+        self.hiddenUnits = np.append(self.hiddenUnits, [0])
+        self.hiddenUnitsAvg = np.append(self.hiddenUnitsAvg, [0])
+        self.hiddenUnitsAvgBias = np.append(self.hiddenUnitsAvgBias, [0])
+        self.hiddenUtilityBias = np.append(self.hiddenUtilityBias, [0])
+        self.hiddenUtility = np.append(self.hiddenUtility, [0])
+        self.fisherUtility = np.append(self.fisherUtility, [0])
+
+        self.counter += 1
+        return
 
 
 if __name__ == "__main__":
-    model = LearningNet(3, 4)
+    model = DetectingNet(3, 4)
     input = torch.tensor([1., 2., 3.])
 
     # print(model.parameters())

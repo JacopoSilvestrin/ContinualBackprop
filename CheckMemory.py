@@ -6,6 +6,7 @@ from Algorithms.FisherNet import FisherNet
 from Algorithms.FisherUnitNet import FisherUnitNet
 from Algorithms.TargetNet import TargetNet
 from Algorithms.RandomResNet import RandomResNet
+from Algorithms.DetectingNet import DetectingNet
 import random
 import sys
 from torch import nn
@@ -30,6 +31,7 @@ randErrors = np.zeros((runsN, exampleN))
 fisherErrors = np.zeros((runsN, exampleN))
 fisherUnitErrors = np.zeros((runsN, exampleN))
 benchErrors = np.zeros((runsN, exampleN))
+detErrors = np.zeros((runsN, exampleN))
 inputs = np.zeros((runsN, int(exampleN/2), m))
 outputs = np.zeros((runsN, int(exampleN/2)))
 
@@ -45,6 +47,7 @@ for j in range(0, runsN):
     benchLearner = LearningNet(m, 1)
     fisherLearner = FisherNet(m, 1)
     fisherUnitLearner = FisherUnitNet(m, 1)
+    detLearner = DetectingNet(m, 1)
 
     # Set input
     inputVec = np.random.choice([0, 1], m)
@@ -76,6 +79,7 @@ for j in range(0, runsN):
         y3 = y.detach().clone()
         y4 = y.detach().clone()
         y5 = y.detach().clone()
+        y6 = y.detach().clone()
         outputs[j, i] = y.detach().item()
 
         outCont = contLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
@@ -83,6 +87,7 @@ for j in range(0, runsN):
         outRand = randLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
         outFisher = fisherLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
         outFisherUnit = fisherUnitLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+        outDet = detLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
 
         # Train contLearner
         contLoss = (outCont - y1) ** 2
@@ -124,6 +129,15 @@ for j in range(0, runsN):
         fisherUnitLearner.optimizer.step()
         fisherUnitLearner.genAndTest()
 
+        # Train DetNetwork learner
+        detLoss = (outDet - y6) ** 2
+        detErrors[j, i] = detLoss.detach().item()
+        detLearner.zero_grad()
+        detLoss.backward()
+        detLearner.optimizer.step()
+        detLearner.genAndTest()
+        detLearner.growNet()
+
     # Feed old values
     for i in range(int(exampleN/2), exampleN):
         outCont = contLearner(torch.from_numpy(inputs[j,i-int(exampleN/2)]).type(torch.FloatTensor))
@@ -131,6 +145,7 @@ for j in range(0, runsN):
         outRand = randLearner(torch.from_numpy(inputs[j, i - int(exampleN / 2)]).type(torch.FloatTensor))
         outFisher = fisherLearner(torch.from_numpy(inputs[j, i - int(exampleN / 2)]).type(torch.FloatTensor))
         outFisherUnit = fisherUnitLearner(torch.from_numpy(inputs[j, i - int(exampleN / 2)]).type(torch.FloatTensor))
+        outDet = detLearner(torch.from_numpy(inputs[j, i - int(exampleN / 2)]).type(torch.FloatTensor))
 
         y = target(torch.from_numpy(inputs[j,i-int(exampleN/2)]).type(torch.FloatTensor))
         y1 = y.detach().clone()
@@ -138,18 +153,21 @@ for j in range(0, runsN):
         y3 = y.detach().clone()
         y4 = y.detach().clone()
         y5 = y.detach().clone()
+        y6 = y.detach().clone()
 
         contLoss = (outCont - y1) ** 2
         benchLoss = (outBench - y2) ** 2
         randLoss = (outRand - y3) ** 2
         fisherLoss = (outFisher - y4) ** 2
         fisherUnitLoss = (outFisherUnit - y5) ** 2
+        detLoss = (outDet - y6) ** 2
 
         contErrors[j, i] = contLoss.detach().item()
         randErrors[j, i] = randLoss.detach().item()
         benchErrors[j, i] = benchLoss.detach().item()
         fisherErrors[j, i] = fisherLoss.detach().item()
         fisherUnitErrors[j, i] = fisherUnitLoss.detach().item()
+        detErrors[j, i] = detLoss.detach().item()
 
         '''# Train cont
         contLearner.zero_grad()
@@ -178,6 +196,7 @@ np.save("randErrors", randErrors)
 np.save("benchErrors", benchErrors)
 np.save("fisherErrors", fisherErrors)
 np.save("fisherUnitErrors", fisherUnitErrors)
+np.save("detErrors", detErrors)
 np.save("inputHistory", inputs)
 np.save("outputHistory", outputs)
 
