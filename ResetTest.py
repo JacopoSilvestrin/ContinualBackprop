@@ -89,10 +89,12 @@ for j in range(0, runsN):
 
         outputs[j, i] = y.detach().item()
 
-        outCont = contLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
-        outFisher = fisherUnitLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+
         # Train normally first 10k samples
         if i < 10000:
+
+            outCont = contLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+            outFisher = fisherUnitLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
             # Train contLearner
             contLoss = (outCont - y1) ** 2
             contErrors[j, i] = contLoss.detach().item()
@@ -107,6 +109,7 @@ for j in range(0, runsN):
             fisherUnitErrors[j, i] = fisherLoss.detach().item()
             fisherUnitLearner.zero_grad()
             fisherLoss.backward()
+            fisherUnitLearner.optimizer.step()
             fisherUnitLearner.genAndTest()
             fisherUtility = fisherUnitLearner.fisherUtility
 
@@ -164,14 +167,16 @@ for j in range(0, runsN):
                     print(contPicked)
                     print(fisherPicked)
 
-                # Evaluate without training
-                # Train contLearner
-                contLoss = (outCont - y1) ** 2
-                contErrors[j, i] = contLoss.detach().item()
+            outCont = contLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+            outFisher = fisherUnitLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+            # Evaluate without training
+            # Train contLearner
+            contLoss = (outCont - y1) ** 2
+            contErrors[j, i] = contLoss.detach().item()
 
-                # Train Fisher learner
-                fisherLoss = (outFisher - y2) ** 2
-                fisherUnitErrors[j, i] = fisherLoss.detach().item()
+            # Train Fisher learner
+            fisherLoss = (outFisher - y2) ** 2
+            fisherUnitErrors[j, i] = fisherLoss.detach().item()
 
 np.save("contErrors", contErrors)
 np.save("fisherUnitErrors", fisherUnitErrors)
