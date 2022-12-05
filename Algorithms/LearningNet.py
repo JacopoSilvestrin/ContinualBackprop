@@ -10,9 +10,9 @@ from functools import partial
 
 class LearningNet(nn.Module):
 
-    def __init__(self, stateDim, outDim):
+    def __init__(self, stateDim, outDim, hidden_dim=5):
         super(LearningNet, self).__init__()
-        hiddenLayerDim = 5
+        hiddenLayerDim = hidden_dim
         self.l1 = nn.Linear(stateDim, hiddenLayerDim)
         self.a1 = nn.ReLU()
         self.l2 = nn.Linear(hiddenLayerDim, outDim)

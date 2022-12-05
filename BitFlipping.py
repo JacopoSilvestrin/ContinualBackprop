@@ -4,6 +4,9 @@ from Algorithms.LearningNet import LearningNet
 from Algorithms.TargetNet import TargetNet
 from Algorithms.GrowingNet import GrowingNet
 from Algorithms.FisherNet import FisherNet
+from Algorithms.GrowCBP import GrowCBP
+from Algorithms.FisherUnitNet import FisherUnitNet
+from Algorithms.DetectingNet import DetectingNet
 import random
 import sys
 from torch import nn
@@ -12,20 +15,22 @@ from torch import nn
 
 m = 20
 f = 15
-T = 100000
+T = 10000
 
 # Set seed
 random.seed(42)
 np.random.seed(42)
 
-exampleN = 60000
+exampleN = 1000000
 runsN = 30
 
 # Errors values
 contErrors = np.zeros((runsN, exampleN))
-growErrors = np.zeros((runsN, exampleN))
+fisherUnitErrors = np.zeros((runsN, exampleN))
 benchErrors = np.zeros((runsN, exampleN))
-fisherErrors = np.zeros((runsN, exampleN))
+growContErrors = np.zeros((runsN, exampleN))
+bigContErrors = np.zeros((runsN, exampleN))
+growFisherErrors = np.zeros((runsN, exampleN))
 inputs = np.zeros((runsN, exampleN, m))
 outputs = np.zeros((runsN, exampleN))
 
@@ -37,10 +42,12 @@ target = TargetNet(m)
 for j in range(0, runsN):
 
     # Create learner networks
-    contLearner = LearningNet(m, 1)
-    growLearner = GrowingNet(m,1)
     benchLearner = LearningNet(m, 1)
-    fisherLearner = FisherNet(m, 1)
+    contLearner = LearningNet(m, 1)
+    growContLearner = GrowCBP(m, 1)
+    bigContLearner = LearningNet(m, 1, hidden_dim=105)
+    fisherUnitLearner = FisherUnitNet(m, 1)
+    detLearner = DetectingNet(m, 1)
 
     # Set input
     inputVec = np.random.choice([0, 1], m)
@@ -73,54 +80,72 @@ for j in range(0, runsN):
         y2 = y.detach().clone()
         y3 = y.detach().clone()
         y4 = y.detach().clone()
+        y5 = y.detach().clone()
+        y6 = y.detach().clone()
         outputs[j, i] = y.detach().item()
 
-        outCont = contLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
         outBench = benchLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
-        outGrow = growLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
-        outFisher = fisherLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+        outCont = contLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+        outGrowCont = growContLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+        outBigCont = bigContLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+        outFisherUnit = fisherUnitLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+        outDet = detLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+
+        # Train benchLearner
+        benchLoss = (outBench - y1) ** 2
+        benchErrors[j, i] = benchLoss.detach().item()
+        benchLearner.zero_grad()
+        benchLoss.backward()
+        benchLearner.optimizer.step()
 
         # Train contLearner
-        contLoss = (outCont - y1) ** 2
+        contLoss = (outCont - y2) ** 2
         contErrors[j, i] = contLoss.detach().item()
         contLearner.zero_grad()
         contLoss.backward()
         contLearner.optimizer.step()
         contLearner.genAndTest()
 
-        # Train benchLearner
-        benchLoss = (outBench - y2) ** 2
-        benchErrors[j, i] = benchLoss.detach().item()
-        benchLearner.zero_grad()
-        benchLoss.backward()
-        #print("Print some gradients:")
-        #print("w1:")
-        #print(benchLearner.l1.weight.grad)
-        #print("w2")
-        #print(benchLearner.l2.weight.grad)
-        benchLearner.optimizer.step()
+        # Train GrowCont
+        growContLoss = (outGrowCont - y3) ** 2
+        growContErrors[j, i] = growContLoss.detach().item()
+        growContLearner.zero_grad()
+        growContLoss.backward()
+        growContLearner.optimizer.step()
+        growContLearner.genAndTest()
+        growContLearner.growNet()
 
-        # Train grow learner
-        growLoss = (outGrow - y3) ** 2
-        growErrors[j, i] = growLoss.detach().item()
-        growLearner.zero_grad()
-        growLoss.backward()
-        growLearner.optimizer.step()
-        growLearner.growNet(1)
+        # Train BigCont
+        bigContLoss = (outBigCont - y4) ** 2
+        bigContErrors[j, i] = bigContLoss.detach().item()
+        bigContLearner.zero_grad()
+        bigContLoss.backward()
+        bigContLearner.optimizer.step()
+        bigContLearner.genAndTest()
 
-        # Train Fisher learner
-        fisherLoss = (outFisher - y4) ** 2
-        fisherErrors[j, i] = fisherLoss.detach().item()
-        fisherLearner.zero_grad()
-        fisherLoss.backward()
-        fisherLearner.computeFisher()
-        fisherLearner.optimizer.step()
-        fisherLearner.FisherReplacement()
+        # Train FisherUnit learner
+        fisherUnitLoss = (outFisherUnit - y5) ** 2
+        fisherUnitErrors[j, i] = fisherUnitLoss.detach().item()
+        fisherUnitLearner.zero_grad()
+        fisherUnitLoss.backward()
+        fisherUnitLearner.optimizer.step()
+        fisherUnitLearner.genAndTest()
+
+        # Train DetNetwork learner
+        detLoss = (outDet - y6) ** 2
+        growFisherErrors[j, i] = detLoss.detach().item()
+        detLearner.zero_grad()
+        detLoss.backward()
+        detLearner.optimizer.step()
+        detLearner.genAndTest()
+        detLearner.growNet()
 
 np.save("contErrors", contErrors)
+np.save("growContErrors", growContErrors)
+np.save("bigContErrors", bigContErrors)
 np.save("benchErrors", benchErrors)
-np.save("growErrors", growErrors)
-np.save("fisherErrors", fisherErrors)
+np.save("fisherUnitErrors", fisherUnitErrors)
+np.save("detErrors", growFisherErrors)
 np.save("inputHistory", inputs)
 np.save("outputHistory", outputs)
 
