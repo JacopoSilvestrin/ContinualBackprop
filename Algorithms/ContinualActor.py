@@ -11,12 +11,13 @@ class Actor(nn.Module):
 
     def __init__(self, stateDim, actionDim):
         super(Actor, self).__init__()
-        hiddenLayerDim = 128
+        hiddenLayerDim = 32
         self.l1 = nn.Linear(stateDim, hiddenLayerDim)
         self.a1 = nn.Tanh()
         self.l2 = nn.Linear(hiddenLayerDim, hiddenLayerDim)
         self.a2 = nn.Tanh()
         self.l3 = nn.Linear(hiddenLayerDim, actionDim)
+        self.model = nn.Sequential(self.l1, self.a1, self.l2, self.a2, self.l3)
 
         # Initialise the weights
         torch.nn.init.kaiming_uniform_(self.l1.weight, mode='fan_in', nonlinearity='tanh')
