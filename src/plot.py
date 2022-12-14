@@ -71,3 +71,56 @@ plt.legend(title='Legend')
 plt.show()
 
 plt.figure()
+x = np.arange(int(plot_dim/2))
+firstMean = v_2_mean[0:int(v_2_mean.shape[0]/2)]
+firstSem = v_2_sem[0:int(v_2_mean.shape[0]/2)]
+secondMean = v_2_mean[int(v_2_mean.shape[0]/2):]
+secondSem = v_2_sem[int(v_2_mean.shape[0]/2):]
+plt.plot(x, firstMean, 'r', label='First time')
+plt.fill_between(x, firstMean - firstSem, firstMean + firstSem, color='r', alpha=0.2)
+plt.plot(x, secondMean, 'y', label='Second time')
+plt.fill_between(x, secondMean - secondSem, secondMean + secondSem, color='r', alpha=0.2)
+plt.title('BitFlippling regression problem, ContBackprop first visit vs second visit')
+
+plt.legend(title='Legend')
+plt.show()
+
+plt.figure()
+x = np.arange(int(plot_dim/2))
+firstMean = v_4_mean[0:int(v_4_mean.shape[0]/2)]
+firstSem = v_4_sem[0:int(v_4_mean.shape[0]/2)]
+secondMean = v_4_mean[int(v_4_mean.shape[0]/2):]
+secondSem = v_4_sem[int(v_4_mean.shape[0]/2):]
+plt.plot(x, firstMean, 'r', label='First time')
+plt.fill_between(x, firstMean - firstSem, firstMean + firstSem, color='r', alpha=0.2)
+plt.plot(x, secondMean, 'y', label='Second time')
+plt.fill_between(x, secondMean - secondSem, secondMean + secondSem, color='r', alpha=0.2)
+plt.title('BitFlippling regression problem, FisherBackprop first visit vs second visit')
+
+plt.legend(title='Legend')
+plt.show()
+
+
+plt.figure()
+x = np.arange(int(plot_dim/2))
+firstMeanCBP = v_2_mean[0:int(v_2_mean.shape[0]/2)]
+firstSemCBP = v_2_sem[0:int(v_2_mean.shape[0]/2)]
+secondMeanCBP = v_2_mean[int(v_2_mean.shape[0]/2):]
+secondSemCBP = v_2_sem[int(v_2_mean.shape[0]/2):]
+plt.plot(x, firstMeanCBP, 'r', label='First time ContBackprop')
+plt.fill_between(x, firstMeanCBP - firstSemCBP, firstMeanCBP + firstSemCBP, color='r', alpha=0.2)
+plt.plot(x, secondMeanCBP, 'y', label='Second time ContBackprop')
+plt.fill_between(x, secondMeanCBP - secondSemCBP, secondMeanCBP + secondSemCBP, color='r', alpha=0.2)
+
+firstMean = v_4_mean[0:int(v_4_mean.shape[0]/2)]
+firstSem = v_4_sem[0:int(v_4_mean.shape[0]/2)]
+secondMean = v_4_mean[int(v_4_mean.shape[0]/2):]
+secondSem = v_4_sem[int(v_4_mean.shape[0]/2):]
+plt.plot(x, firstMean, 'g', label='First time Fisher')
+plt.fill_between(x, firstMean - firstSem, firstMean + firstSem, color='r', alpha=0.2)
+plt.plot(x, secondMean, 'b', label='Second time Fisher')
+plt.fill_between(x, secondMean - secondSem, secondMean + secondSem, color='r', alpha=0.2)
+plt.title('BitFlippling regression problem, first visit vs second visit')
+
+plt.legend(title='Legend')
+plt.show()

@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 import numpy as np
+import line_profiler
 import math
 import torch.nn.functional as F
 import collections
@@ -24,12 +25,12 @@ class LearningNet(nn.Module):
         torch.nn.init.zeros_(self.l2.bias)
 
         # Continual Backprop parameters
-        self.hiddenUnits = np.zeros((hiddenLayerDim))
-        self.hiddenUnitsAvg = np.zeros((hiddenLayerDim))
-        self.hiddenUnitsAvgBias = np.zeros((hiddenLayerDim))
-        self.hiddenUnitsAge = np.zeros((hiddenLayerDim))
-        self.hiddenUtilityBias = np.zeros((hiddenLayerDim))
-        self.hiddenUtility = np.zeros((hiddenLayerDim))
+        self.hiddenUnits = torch.zeros((hiddenLayerDim))
+        self.hiddenUnitsAvg = torch.zeros((hiddenLayerDim))
+        self.hiddenUnitsAvgBias = torch.zeros((hiddenLayerDim))
+        self.hiddenUnitsAge = torch.zeros((hiddenLayerDim))
+        self.hiddenUtilityBias = torch.zeros((hiddenLayerDim))
+        self.hiddenUtility = torch.zeros((hiddenLayerDim))
         self.nHiddenLayers = 1
 
         self.replacementRate = 1e-4
@@ -52,22 +53,22 @@ class LearningNet(nn.Module):
 
     def forward(self, x):
         hook1 = self.a1.register_forward_hook(self.getActivation('h1'))
-        #print(x.dtype)
+        # print(x.dtype)
         x = self.l1(x)
         x = self.a1(x)
         x = self.l2(x)
+        #x = self.model(x)
         hook1.remove()
 
         # Update hidden units age
         self.hiddenUnitsAge += 1
         # Update hidden units estimates
         # Take hidden units values from dictionary
-        self.hiddenUnits = np.reshape(self.activation['h1'].detach().numpy(),
-                                            (self.hiddenUnitsAvgBias.shape[0]))
-        #print("Activations: check if many are dead")
-        #print(self.hiddenUnits)
+        self.hiddenUnits = torch.reshape(self.activation['h1'].detach(),(self.hiddenUnitsAvgBias.shape[0],))
+        # print("Activations: check if many are dead")
+        # print(self.hiddenUnits)
         # Unbiased estimate. Warning: uses old mean estimate of the hidden units.
-        self.hiddenUnitsAvg = self.hiddenUnitsAvgBias / (1 - np.power(self.decayRate, self.hiddenUnitsAge))
+        self.hiddenUnitsAvg = self.hiddenUnitsAvgBias / (1 - torch.pow(self.decayRate, self.hiddenUnitsAge))
         # Biased estimate: updated with current hidden units values
         self.hiddenUnitsAvgBias = self.decayRate * self.hiddenUnitsAvgBias + \
                                   (1 - self.decayRate) * self.hiddenUnits
@@ -77,25 +78,25 @@ class LearningNet(nn.Module):
         # Weights going out from layer l to layer l+1.
         # The i-th column of the matrix has the weights of the i-th element of l-th layer.
         # For each layer we have a mxn matrix with n=#units of l-th layer and m=#units in l+i-th layer
-        outgoingWeightsH1 = self.state_dict()['l2.weight'].detach().numpy()
+        outgoingWeightsH1 = self.state_dict()['l2.weight'].detach()
         # Sum together contributions (sum elements of same columns) from same hidden unit
         # and reshape to obtain h1xh2 matrix to use in the formula.
-        outgoingWeights = np.sum(np.abs(outgoingWeightsH1), axis=0).flatten()
+        outgoingWeights = torch.sum(np.abs(outgoingWeightsH1), dim=0).flatten()
 
-        contribUtility = np.multiply(np.abs(self.hiddenUnits - self.hiddenUnitsAvg), outgoingWeights)
+        contribUtility = torch.mul(torch.abs(self.hiddenUnits - self.hiddenUnitsAvg), outgoingWeights)
 
         # Compute the adaptation utility
         # Weights going in from layer l-1 to layer l.
         # The j-th row of the matrix has the weights going in the j-th element of l-th layer.
         # For each layer we have a mxn matrix with n=#units of l-th layer and m=#units in l-1-th layer
-        inputWeightsH1 = self.state_dict()['l1.weight'].detach().numpy()
+        inputWeightsH1 = self.state_dict()['l1.weight'].detach()
         # Sum together contributions (sum elements of same rows) from same hidden unit
         # and reshape to obtain h1xh2 matrix to use in the formula.
         # The adaptation utility is the element-wise inverse of the inputWeight matrix.
-        inputWeights = np.sum(np.abs(inputWeightsH1), axis=1).flatten()
+        inputWeights = torch.sum(np.abs(inputWeightsH1), dim=1).flatten()
 
         # Compute hidden unit utility
-        self.hiddenUtility = self.hiddenUtilityBias / (1 - np.power(self.decayRate, self.hiddenUnitsAge))
+        self.hiddenUtility = self.hiddenUtilityBias / (1 - torch.pow(self.decayRate, self.hiddenUnitsAge))
         # Now update the hidden utility with new values
         self.hiddenUtilityBias = self.decayRate * self.hiddenUtilityBias + \
                                  (1 - self.decayRate) * contribUtility / inputWeights
@@ -106,15 +107,14 @@ class LearningNet(nn.Module):
 
         nUnits = self.hiddenUnits.shape[0]
 
-
         # Select lower utility features depending on the replacement rate
-        self.unitsToReplace += self.replacementRate * np.count_nonzero(self.hiddenUnitsAge > self.maturityThreshold)
+        self.unitsToReplace += self.replacementRate * torch.count_nonzero(self.hiddenUnitsAge > self.maturityThreshold)
 
         # If we accumulated enough to have one or more units to replace
         while (self.unitsToReplace >= 1):
             # Scan matrix of utilities to find lower element with age > maturityThreshold.
-            min = np.amin(self.hiddenUtility)
-            #minPos = 0
+            min = torch.amin(self.hiddenUtility)
+            # minPos = 0
             minPos = []
             for i in range(self.hiddenUtility.shape[0]):
                 if self.hiddenUtility[i] == min and self.hiddenUnitsAge[i] > self.maturityThreshold:

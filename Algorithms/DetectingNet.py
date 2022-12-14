@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 import numpy as np
-
+import line_profiler
 
 class DetectingNet(nn.Module):
 
@@ -34,7 +34,6 @@ class DetectingNet(nn.Module):
         self.nHiddenLayers = 1
 
         # Fisher resets parameters
-        self.data = []
         self.nParams = 0
         self.nLayers = 0
 
@@ -44,10 +43,10 @@ class DetectingNet(nn.Module):
                 self.nParams += torch.numel(layer.weight)
                 self.nParams += torch.numel(layer.bias)
 
-        self.hiddenFisherUnitsAge = np.zeros((hiddenLayerDim))
-        self.F = np.zeros((self.nParams, self.nParams))
+        self.hiddenFisherUnitsAge = torch.zeros((hiddenLayerDim))
+        self.F = torch.zeros((self.nParams, self.nParams))
         self.FCount = 0
-        self.fisherUtility = np.zeros((hiddenLayerDim))
+        self.fisherUtility = torch.zeros((hiddenLayerDim))
 
         # Detection params
         self.fastDecay = 0.1
@@ -80,15 +79,15 @@ class DetectingNet(nn.Module):
         return hook
 
     def forward(self, x):
-        hook1 = self.a1.register_forward_hook(self.getActivation('h1'))
+        #hook1 = self.a1.register_forward_hook(self.getActivation('h1'))
         #print(x.dtype)
         #x = self.l1(x)
         #x = self.a1(x)
         #x = self.l2(x)
         x = self.model(x)
-        hook1.remove()
+        #hook1.remove()
 
-        # Update hidden units age
+        '''# Update hidden units age
         self.hiddenUnitsAge += 1
         # Update hidden units estimates
         # Take hidden units values from dictionary
@@ -128,7 +127,7 @@ class DetectingNet(nn.Module):
         self.hiddenUtility = self.hiddenUtilityBias / (1 - np.power(self.decayRate, self.hiddenUnitsAge))
         # Now update the hidden utility with new values
         self.hiddenUtilityBias = self.decayRate * self.hiddenUtilityBias + \
-                                 (1 - self.decayRate) * contribUtility / inputWeights
+                                 (1 - self.decayRate) * contribUtility / inputWeights'''
 
         return x
 
@@ -147,14 +146,14 @@ class DetectingNet(nn.Module):
     def computeFisher(self):
         # Computation of Fisher
         self.hiddenFisherUnitsAge += 1
-        paramsVec = np.array([])
+        paramsVec = torch.tensor([])
         for layer in self.model:
             if isinstance(layer, nn.Linear):
-                weightsGrad = layer.weight.grad.detach().flatten().numpy()
-                biasGrad = layer.bias.grad.detach().flatten().numpy()
-                paramsVec = np.concatenate((paramsVec, weightsGrad, biasGrad), axis=0)
+                weightsGrad = layer.weight.grad.detach().flatten()
+                biasGrad = layer.bias.grad.detach().flatten()
+                paramsVec = torch.concatenate((paramsVec, weightsGrad, biasGrad), dim=0)
 
-        self.F = self.decayRate * self.F + (1 - self.decayRate) * np.outer(paramsVec, paramsVec)
+        self.F = self.decayRate * self.F + (1 - self.decayRate) * torch.outer(paramsVec, paramsVec)
 
     # Used internally
     def computeFUtility(self):
@@ -164,7 +163,7 @@ class DetectingNet(nn.Module):
         count = 0
         for layer in self.model:
             if isinstance(layer, nn.Linear):
-                params[count] = [layer.weight.data.detach().numpy(), layer.bias.data.detach().numpy()]
+                params[count] = [layer.weight.data.detach(), layer.bias.data.detach()]
                 count += 1
         # Compute utility
         for j in range(self.nHiddenLayers):
@@ -173,31 +172,30 @@ class DetectingNet(nn.Module):
             output_w = params[j + 1][0]
             output_b = params[j + 1][1]
             for i in range(self.fisherUtility.shape[0]):
-                i_w = np.zeros_like(input_w)
+                i_w = torch.zeros_like(input_w)
                 i_w[i, :] = -1 * input_w[i, :]
-                i_b = np.zeros_like(input_b)
+                i_b = torch.zeros_like(input_b)
                 i_b[i] = -1 * input_b[i]
-                o_w = np.zeros_like(output_w)
+                o_w = torch.zeros_like(output_w)
                 o_w[:, i] = -1 * output_w[:, i]
-                o_b = np.zeros_like(output_b)
-                delta = np.concatenate((i_w.flatten(), i_b.flatten(), o_w.flatten(), o_b.flatten()), axis=0)
+                o_b = torch.zeros_like(output_b)
+                delta = torch.concatenate((i_w.flatten(), i_b.flatten(), o_w.flatten(), o_b.flatten()), dim=0)
                 if self.nHiddenLayers == 1:
-                    self.fisherUtility[i] = self.decayRate * self.fisherUtility[i] + (1 - self.decayRate) * np.matmul(np.matmul(np.transpose(delta), self.F), delta)
+                    self.fisherUtility[i] = self.decayRate * self.fisherUtility[i] + (1 - self.decayRate) * torch.matmul(torch.matmul(delta, self.F), delta)
                 else:
-                    self.fisherUtility[i, j] = self.decayRate * self.fisherUtility[i] + (1 - self.decayRate) * np.matmul(np.matmul(np.transpose(delta), self.F), delta)
+                    self.fisherUtility[i, j] = self.decayRate * self.fisherUtility[i] + (1 - self.decayRate) * torch.matmul(torch.matmul(delta, self.F), delta)
 
                 if any(self.fisherUtility < 0):
                     print("ELEMENTS < 0 ------------------------------------------------------------------------------------------------------------")
 
-
     def FisherReplacement(self, mode='full'):
         self.FCount += 1
 
-        self.unitsToReplace += self.replacementRate * np.count_nonzero(self.hiddenFisherUnitsAge > self.maturityThreshold)
+        self.unitsToReplace += self.replacementRate * torch.count_nonzero(self.hiddenFisherUnitsAge > self.maturityThreshold)
         # If we accumulated enough to have one or more units to replace
         while (self.unitsToReplace >= 1):
             # Scan matrix of utilities to find lower element with age > maturityThreshold.
-            min = np.amin(self.fisherUtility)
+            min = torch.amin(self.fisherUtility)
             # minPos = 0
             minPos = []
             for i in range(self.fisherUtility.shape[0]):
@@ -211,14 +209,14 @@ class DetectingNet(nn.Module):
             minPos = np.random.choice(minPos)
             self.unitReplaced.append(minPos)
 
-            # Now out min and minPos values are legitimate, and we can replace the input weights and set
+            # Now out min and minPos values are legitimate and we can replace the input weights and set
             # to zero the outgoing weights for the selected hidden unit.
             # Set to 0 the age of the hidden unit.
-            self.hiddenUnitsAge[minPos] = 0
+            # self.hiddenUnitsAge[minPos] = 0
             self.hiddenFisherUnitsAge[minPos] = 0
             # Set to 0 the utilities and mean values of the hidden unit.
-            self.hiddenUtilityBias[minPos] = 0
-            self.hiddenUnitsAvgBias[minPos] = 0
+            # self.hiddenUtilityBias[minPos] = 0
+            # self.hiddenUnitsAvgBias[minPos] = 0
             self.fisherUtility[minPos] = 0
 
             # Reset weights
@@ -268,7 +266,7 @@ class DetectingNet(nn.Module):
             self.optimizer = torch.optim.SGD(self.parameters(), lr=1e-2)
 
         # Add zero elements to Fisher matrix
-        temp = np.zeros((self.F.shape[0] + no_of_neurons * (2 + self.I), self.F.shape[0]+ no_of_neurons * (2 + self.I))) # Add self.I params on l1, noofneurons params on l2 and b1
+        temp = torch.zeros((self.F.shape[0] + no_of_neurons * (2 + self.I), self.F.shape[0]+ no_of_neurons * (2 + self.I))) # Add self.I params on l1, noofneurons params on l2 and b1
         tempIndex = 0
         fIndex = 0
         # Add entries relative to weights of first layer
@@ -288,15 +286,15 @@ class DetectingNet(nn.Module):
 
         self.F = temp
         # Add zero element to age vectors (both fisher and CBP)
-        self.hiddenUnitsAge = np.append(self.hiddenUnitsAge, [0])
-        self.hiddenFisherUnitsAge = np.append(self.hiddenFisherUnitsAge, [0])
+        #self.hiddenUnitsAge = np.append(self.hiddenUnitsAge, [0])
+        self.hiddenFisherUnitsAge = torch.concatenate((self.hiddenFisherUnitsAge, torch.tensor([0])), dim=0)
         # Add zero elements to utility vectors of CBP and Fisher
-        self.hiddenUnits = np.append(self.hiddenUnits, [0])
-        self.hiddenUnitsAvg = np.append(self.hiddenUnitsAvg, [0])
-        self.hiddenUnitsAvgBias = np.append(self.hiddenUnitsAvgBias, [0])
-        self.hiddenUtilityBias = np.append(self.hiddenUtilityBias, [0])
-        self.hiddenUtility = np.append(self.hiddenUtility, [0])
-        self.fisherUtility = np.append(self.fisherUtility, [0])
+        #self.hiddenUnits = np.append(self.hiddenUnits, [0])
+        #self.hiddenUnitsAvg = np.append(self.hiddenUnitsAvg, [0])
+        #self.hiddenUnitsAvgBias = np.append(self.hiddenUnitsAvgBias, [0])
+        #self.hiddenUtilityBias = np.append(self.hiddenUtilityBias, [0])
+        #self.hiddenUtility = np.append(self.hiddenUtility, [0])
+        self.fisherUtility = torch.concatenate((self.fisherUtility, torch.tensor([0])), dim=0)
 
         self.counter += 1
         return

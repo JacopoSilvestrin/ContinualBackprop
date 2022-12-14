@@ -1,9 +1,4 @@
 import os
-os.environ["OMP_NUM_THREADS"] = "1" # export OMP_NUM_THREADS=4
-os.environ["OPENBLAS_NUM_THREADS"] = "1" # export OPENBLAS_NUM_THREADS=4
-os.environ["MKL_NUM_THREADS"] = "1" # export MKL_NUM_THREADS=6
-os.environ["VECLIB_MAXIMUM_THREADS"] = "1" # export VECLIB_MAXIMUM_THREADS=4
-os.environ["NUMEXPR_NUM_THREADS"] = "1" # export NUMEXPR_NUM_THREADS=6
 import torch
 import numpy as np
 from Algorithms.LearningNet import LearningNet
@@ -17,10 +12,6 @@ import random
 import sys
 from torch import nn
 
-
-torch.set_num_threads(1)
-
-
 # Bit-Flipping problem
 
 m = 20
@@ -31,8 +22,8 @@ T = 10000
 random.seed(42)
 np.random.seed(42)
 
-exampleN = 1000000
-runsN = 30
+exampleN = 100000
+runsN = 1
 
 # Errors values
 contErrors = np.zeros((runsN, exampleN))
