@@ -22,8 +22,8 @@ T = 10000
 random.seed(42)
 np.random.seed(42)
 
-exampleN = 100000
-runsN = 1
+exampleN = 1000000
+runsN = 30
 
 # Errors values
 contErrors = np.zeros((runsN, exampleN))
@@ -32,6 +32,7 @@ benchErrors = np.zeros((runsN, exampleN))
 growContErrors = np.zeros((runsN, exampleN))
 bigContErrors = np.zeros((runsN, exampleN))
 growFisherErrors = np.zeros((runsN, exampleN))
+bigFishErrors = np.zeros((runsN, exampleN))
 inputs = np.zeros((runsN, exampleN, m))
 outputs = np.zeros((runsN, exampleN))
 
@@ -49,6 +50,7 @@ for j in range(0, runsN):
     bigContLearner = LearningNet(m, 1, hidden_dim=105)
     fisherUnitLearner = FisherUnitNet(m, 1)
     detLearner = DetectingNet(m, 1)
+    bigFishLearner = FisherUnitNet(m, 1, hidden_dim=105)
 
     # Set input
     inputVec = np.random.choice([0, 1], m)
@@ -83,6 +85,7 @@ for j in range(0, runsN):
         y4 = y.detach().clone()
         y5 = y.detach().clone()
         y6 = y.detach().clone()
+        y7 = y.detach().clone()
         outputs[j, i] = y.detach().item()
 
         outBench = benchLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
@@ -91,6 +94,7 @@ for j in range(0, runsN):
         outBigCont = bigContLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
         outFisherUnit = fisherUnitLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
         outDet = detLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+        outBigFish = bigFishLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
 
         # Train benchLearner
         benchLoss = (outBench - y1) ** 2
@@ -141,12 +145,21 @@ for j in range(0, runsN):
         detLearner.genAndTest()
         detLearner.growNet()
 
+        # Train BigFish learner
+        bigFishLoss = (outBigFish - y7) ** 2
+        bigFishErrors[j, i] = bigFishLoss.detach().item()
+        bigFishLearner.zero_grad()
+        bigFishLoss.backward()
+        bigFishLearner.optimizer.step()
+        bigFishLearner.genAndTest()
+
 np.save("contErrors", contErrors)
 np.save("growContErrors", growContErrors)
 np.save("bigContErrors", bigContErrors)
 np.save("benchErrors", benchErrors)
 np.save("fisherUnitErrors", fisherUnitErrors)
 np.save("detErrors", growFisherErrors)
+np.save("bigFishErrors", bigFishErrors)
 np.save("inputHistory", inputs)
 np.save("outputHistory", outputs)
 
