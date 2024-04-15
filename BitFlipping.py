@@ -30,9 +30,10 @@ contErrors = np.zeros((runsN, exampleN))
 fisherUnitErrors = np.zeros((runsN, exampleN))
 benchErrors = np.zeros((runsN, exampleN))
 growContErrors = np.zeros((runsN, exampleN))
-bigContErrors = np.zeros((runsN, exampleN))
-growFisherErrors = np.zeros((runsN, exampleN))
-bigFishErrors = np.zeros((runsN, exampleN))
+fisherErrors = np.zeros((runsN, exampleN))
+#bigContErrors = np.zeros((runsN, exampleN))
+#growFisherErrors = np.zeros((runsN, exampleN))
+#bigFishErrors = np.zeros((runsN, exampleN))
 inputs = np.zeros((runsN, exampleN, m))
 outputs = np.zeros((runsN, exampleN))
 
@@ -47,10 +48,11 @@ for j in range(0, runsN):
     benchLearner = LearningNet(m, 1)
     contLearner = LearningNet(m, 1)
     growContLearner = GrowCBP(m, 1)
-    bigContLearner = LearningNet(m, 1, hidden_dim=105)
+    #bigContLearner = LearningNet(m, 1, hidden_dim=105)
     fisherUnitLearner = FisherUnitNet(m, 1)
-    detLearner = DetectingNet(m, 1)
-    bigFishLearner = FisherUnitNet(m, 1, hidden_dim=105)
+    fisherLearner = FisherNet(m,1)
+    #detLearner = DetectingNet(m, 1)
+    #bigFishLearner = FisherUnitNet(m, 1, hidden_dim=105)
 
     # Set input
     inputVec = np.random.choice([0, 1], m)
@@ -91,10 +93,11 @@ for j in range(0, runsN):
         outBench = benchLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
         outCont = contLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
         outGrowCont = growContLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
-        outBigCont = bigContLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+        #outBigCont = bigContLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
         outFisherUnit = fisherUnitLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
-        outDet = detLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
-        outBigFish = bigFishLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+        #outDet = detLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+        #outBigFish = bigFishLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
+        outFisher = fisherLearner(torch.from_numpy(inputVec).type(torch.FloatTensor))
 
         # Train benchLearner
         benchLoss = (outBench - y1) ** 2
@@ -121,12 +124,20 @@ for j in range(0, runsN):
         growContLearner.growNet()
 
         # Train BigCont
-        bigContLoss = (outBigCont - y4) ** 2
+        '''bigContLoss = (outBigCont - y4) ** 2
         bigContErrors[j, i] = bigContLoss.detach().item()
         bigContLearner.zero_grad()
         bigContLoss.backward()
         bigContLearner.optimizer.step()
-        bigContLearner.genAndTest()
+        bigContLearner.genAndTest()'''
+        # Train Fisher net
+        fisherLoss = (outFisher - y4) ** 2
+        fisherErrors[j, i] = fisherLoss.detach().item()
+        fisherLearner.zero_grad()
+        fisherLoss.backward()
+        fisherLearner.optimizer.step()
+        fisherLearner.genAndTest()
+
 
         # Train FisherUnit learner
         fisherUnitLoss = (outFisherUnit - y5) ** 2
@@ -137,7 +148,7 @@ for j in range(0, runsN):
         fisherUnitLearner.genAndTest()
 
         # Train DetNetwork learner
-        detLoss = (outDet - y6) ** 2
+        '''detLoss = (outDet - y6) ** 2
         growFisherErrors[j, i] = detLoss.detach().item()
         detLearner.zero_grad()
         detLoss.backward()
@@ -151,18 +162,18 @@ for j in range(0, runsN):
         bigFishLearner.zero_grad()
         bigFishLoss.backward()
         bigFishLearner.optimizer.step()
-        bigFishLearner.genAndTest()
+        bigFishLearner.genAndTest()'''
 
-np.save("contErrors", contErrors)
-np.save("growContErrors", growContErrors)
-np.save("bigContErrors", bigContErrors)
-np.save("benchErrors", benchErrors)
-np.save("fisherUnitErrors", fisherUnitErrors)
-np.save("detErrors", growFisherErrors)
-np.save("bigFishErrors", bigFishErrors)
-np.save("inputHistory", inputs)
-np.save("outputHistory", outputs)
-
+np.save("Results/contErrors", contErrors)
+np.save("Results/growContErrors", growContErrors)
+#np.save("bigContErrors", bigContErrors)
+np.save("Results/benchErrors", benchErrors)
+np.save("Results/fisherUnitErrors", fisherUnitErrors)
+#np.save("detErrors", growFisherErrors)
+#np.save("bigFishErrors", bigFishErrors)
+np.save("Results/inputHistory", inputs)
+np.save("Results/outputHistory", outputs)
+np.save("Results/fisherErrors", fisherErrors)
 
 
 

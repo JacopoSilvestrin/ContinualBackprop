@@ -4,12 +4,12 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 # Load data
-v_1 = np.load("/home/jacopo/CBP_Results/BitFlipping/ForgetAndLearn/FairComparison/benchErrors.npy")
-v_2 = np.load("/home/jacopo/CBP_Results/BitFlipping/ForgetAndLearn/FairComparison/contErrors.npy")
-v_3 = np.load("/home/jacopo/CBP_Results/BitFlipping/ForgetAndLearn/FairComparison/detErrors.npy")
-v_4 = np.load("/home/jacopo/CBP_Results/BitFlipping/ForgetAndLearn/FairComparison/fisherUnitErrors.npy")
-v_5 = np.load("/home/jacopo/CBP_Results/BitFlipping/ForgetAndLearn/FairComparison/bigContErrors.npy")
-v_6 = np.load("/home/jacopo/CBP_Results/BitFlipping/ForgetAndLearn/FairComparison/growContErrors.npy")
+v_1 = np.load("/home/jacopo/CBP_Results/BitFlipping/LongTest/benchErrors.npy")
+v_2 = np.load("/home/jacopo/CBP_Results/BitFlipping/LongTest/contErrors.npy")
+v_3 = np.load("/home/jacopo/CBP_Results/BitFlipping/LongTest/detErrors.npy")
+v_4 = np.load("/home/jacopo/CBP_Results/BitFlipping/LongTest/fisherUnitErrors.npy")
+v_5 = np.load("/home/jacopo/CBP_Results/BitFlipping/LongTest/bigContErrors.npy")
+v_6 = np.load("/home/jacopo/CBP_Results/BitFlipping/LongTest/growContErrors.npy")
 
 
 n_samples = v_1.shape[1]
